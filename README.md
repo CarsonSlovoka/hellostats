@@ -15,4 +15,4 @@ gh-pages所用到的第三方工具:
 
 ## demo
 
-![demo](/assets/img/demo.png)
+[![demo](/assets/img/demo.png)](https://carsonslovoka.github.io/hellostats/)
