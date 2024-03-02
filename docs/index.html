@@ -1,0 +1,126 @@
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>語言熱門度比較</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2"></script>
+
+  <!-- https://www.chartjs.org/docs/latest/ -->
+  <link
+    rel="stylesheet"
+    href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css"
+  />
+</head>
+
+<main class="container" style="max-width: 50%">
+  <form>
+    <details class="dropdown">
+      <summary>Select country...</summary>
+      <ul>
+        <li id="li-menu">
+          <!--
+          <label><input type="radio" name="country" value="cn"/>CN</label>
+          <label><input type="checkbox" name="CN"/>CN</label>
+          -->
+        </li>
+      </ul>
+    </details>
+    <input type="submit">
+  </form>
+  <div id="output">
+  </div>
+</main>
+
+<script>
+  async function getDBData() {
+    /*
+    const text = `
+Country, Language, Total, Has Ranking, CI Build Ok, Total %, Has Ranking %, CI Build Ok %
+Global, All, 2520, 2405, 2027, 100,00 %, 100,00 %, 100,00 %
+Global, Python, 525, 505, 446, 20,83 %, 21,00 %, 22,00 %
+cn, Python, 525, 505, 446, 20,83 %, 21,00 %, 22,00 %`
+     */
+
+    const resp = await fetch("https://gist.githubusercontent.com/CarsonSlovoka/dbe92e3652831a5ca16d6774feddc8a8/raw/1e2d16b62fa2ba40773b15651e9b0a4240696db8/HelloStats")
+    const text = await resp.text()
+    const [header, ...rawData] = text.split("\n").filter(e => e.length !== 0)
+    const regex = /([a-zA-Z0-9]*), ([a-zA-Z0-9]*), (\d*), (\d*), (\d*), (\d*,\d*) %, (\d*,\d*) %, (\d*,\d*) %/
+
+    const data = []
+    for (let i = 0; i < rawData.length; i++) {
+      const match = rawData[i].match(regex)
+      if (!match) {
+        continue
+      }
+      const [country, language, total, rank, ciBuildOK, totalPercent, rankPercent, ciBuildPercent] = match.slice(1)
+      const item = {country, language, total, rank, ciBuildOK, totalPercent, rankPercent, ciBuildPercent}
+      item.totalPercent = Number(totalPercent.replace(",", "."))
+      item.rankPercent = Number(rankPercent.replace(",", "."))
+      item.ciBuildPercent = Number(ciBuildPercent.replace(",", "."))
+      data.push(item)
+    }
+    return data
+  }
+
+  (async () => {
+    const dbData = await getDBData()
+
+    // 建立國家的下拉式選單
+    const groups = Object.groupBy(dbData, ({country}) => country)
+    for (const [country, items] of Object.entries(groups)) {
+      // const frag = document.createRange().createContextualFragment(`<label><input type="radio" name="country" value="${country}"/>${country}</label>`)
+      const frag = document.createRange().createContextualFragment(`<label><input type="checkbox" name="${country}"/>${country}</label>`)
+      document.querySelector('#li-menu').append(frag)
+    }
+
+    const outputElem = document.querySelector("#output")
+    const form = document.forms[0]
+    form.onsubmit = e => {
+      e.preventDefault()
+
+      // 找尋選中的國家
+      const countries = []
+      document.querySelectorAll(`#li-menu input[type="checkbox"]`).forEach(e => {
+        if (e.checked) {
+          countries.push(e.name)
+        }
+      })
+
+      // 資料分群: 依據選中國家來區分
+      const groups = Object.groupBy(dbData.filter(item => countries.includes(item.country)), ({country}) => country)
+
+      // 建立圓餅圖
+      outputElem.innerHTML = ""
+      for (const [country, items] of Object.entries(groups)) {
+        const canvas = document.createElement("canvas")
+        const ctx = canvas.getContext("2d")
+        new Chart(ctx, {
+          type: 'pie',
+          data: {
+            labels: items.map(item => item.language),
+            datasets: ["totalPercent", "rankPercent", "ciBuildPercent"].map(property => {
+              return {
+                label: property,
+                data: items.map(item => item[`${property}`]),
+                borderWidth: 1
+              }
+            })
+          },
+          options: {
+            responsive: true,
+            /* v4有問題，v2才能，暫時用h2取代
+            title: {
+              display: true,
+              text: country,
+            },
+             */
+          }
+        })
+        const h2 = document.createElement("h2")
+        h2.innerText = country
+        outputElem.append(h2)
+        outputElem.append(canvas)
+      }
+      return false
+    }
+  })()
+</script>
